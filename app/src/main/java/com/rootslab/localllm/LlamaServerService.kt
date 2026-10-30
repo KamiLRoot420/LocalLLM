@@ -101,7 +101,7 @@ class LlamaServerService : Service() {
         }
 
         dataStore.setServerRunning(true)
-        if (dataStore.isWakeLockEnabled()) {
+        if (dataStore.currentWakeLock()) {
             acquireWakeLock()
         }
         WatchdogScheduler.schedule(this)

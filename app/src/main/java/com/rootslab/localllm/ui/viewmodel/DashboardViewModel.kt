@@ -37,7 +37,7 @@ class DashboardViewModel : ViewModel() {
 
     init {
         viewModelScope.launch {
-            ServiceLocator.dataStore.configFlow().collect { _config.value = it }
+            ServiceLocator.dataStore.configFlow.collect { _config.value = it }
         }
         viewModelScope.launch {
             ServiceLocator.dataStore.serverRunningFlow.collect { running ->

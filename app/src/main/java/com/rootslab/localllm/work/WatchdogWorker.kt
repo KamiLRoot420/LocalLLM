@@ -10,6 +10,7 @@ import androidx.work.WorkerParameters
 import com.rootslab.localllm.LlamaServerService
 import com.rootslab.localllm.di.ServiceLocator
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 
 /**

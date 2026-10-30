@@ -1,11 +1,15 @@
 package com.rootslab.localllm
 
 import android.util.Log
-import com.rootslab.localllm.models.ApiError
+import com.rootslab.localllm.models.ChatCompletionMessage
 import com.rootslab.localllm.models.ChatCompletionRequest
-import com.rootslab.localllm.models.ChatCompletionResponse
-import com.rootslab.localllm.models.ModelInfo
-import com.rootslab.localllm.models.ModelsList
+import com.rootslab.localllm.models.ChatCompletionChunk
+import com.rootslab.localllm.models.ChunkChoice
+import com.rootslab.localllm.models.ChunkDelta
+import com.rootslab.localllm.models.ErrorBody
+import com.rootslab.localllm.models.ErrorResponse
+import com.rootslab.localllm.models.ModelDescriptor
+import com.rootslab.localllm.models.ModelList
 import com.rootslab.localllm.models.ServerConfig
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -28,9 +32,11 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.concurrent.atomic.AtomicLong
 
@@ -105,9 +111,9 @@ object ApiServer {
             anyHost()
             allowHeader(HttpHeaders.ContentType)
             allowHeader(HttpHeaders.Authorization)
-            allowMethod(HttpMethods.Get)
-            allowMethod(HttpMethods.Post)
-            allowMethod(HttpMethods.Options)
+            allowMethod(HttpMethod.Get)
+            allowMethod(HttpMethod.Post)
+            allowMethod(HttpMethod.Options)
         }
 
         install(StatusPages) {
@@ -115,7 +121,7 @@ object ApiServer {
                 Log.e(TAG, "Unhandled request error", cause)
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    ApiError(ApiError.ErrorBody(message = cause.message ?: "Internal error"))
+                    ErrorResponse(ErrorBody(message = cause.message ?: "Internal error"))
                 )
             }
         }
@@ -127,9 +133,9 @@ object ApiServer {
 
             get("/v1/models") {
                 call.respond(
-                    ModelsList(
-                        listOf(
-                            ModelInfo(
+                    ModelList(
+                        data = listOf(
+                            ModelDescriptor(
                                 id = "local-gguf",
                                 created = System.currentTimeMillis() / 1000,
                                 owned_by = "rootslab"
@@ -153,7 +159,7 @@ object ApiServer {
         } catch (e: Exception) {
             respond(
                 HttpStatusCode.BadRequest,
-                ApiError(ApiError.ErrorBody(message = "Malformed request body: ${e.message}"))
+                ErrorResponse(ErrorBody(message = "Malformed request body: ${e.message}"))
             )
             return
         }
@@ -161,7 +167,7 @@ object ApiServer {
         if (request.messages.isEmpty()) {
             respond(
                 HttpStatusCode.BadRequest,
-                ApiError(ApiError.ErrorBody(message = "'messages' must not be empty"))
+                ErrorResponse(ErrorBody(message = "'messages' must not be empty"))
             )
             return
         }
@@ -179,55 +185,52 @@ object ApiServer {
         val created = System.currentTimeMillis() / 1000
 
         if (request.stream == true) {
-            respondBytesWriter(
-                contentType = ContentType.Text.EventStream,
-                headers = headers {
-                    append(HttpHeaders.CacheControl, "no-cache")
-                    append(HttpHeaders.Connection, "keep-alive")
-                }
-            ) {
-                writeString(": ${effectiveConfig.maxTokens} max tokens\n\n")
+            response.headers.append(HttpHeaders.CacheControl, "no-cache")
+            response.headers.append(HttpHeaders.Connection, "keep-alive")
+
+            respondBytesWriter(contentType = ContentType.Text.EventStream) {
+                writeStringUtf8(": ${effectiveConfig.maxTokens} max tokens\n\n")
 
                 try {
-                    for (piece in LlamaManager.generateStream(prompt, effectiveConfig)) {
-                        val chunk = ChatCompletionResponse(
+                    LlamaManager.generateStream(prompt, effectiveConfig).collect { piece ->
+                        val chunk = ChatCompletionChunk(
                             id = completionId,
                             created = created,
                             model = request.model,
                             choices = listOf(
-                                ChatCompletionResponse.Choice(
+                                ChunkChoice(
                                     index = 0,
-                                    delta = ChatCompletionResponse.Choice.Delta(content = piece)
+                                    delta = ChunkDelta(content = piece)
                                 )
                             )
                         )
-                        writeString("data: ${json.encodeToString(chunk)}\n\n")
+                        writeStringUtf8("data: ${json.encodeToString(chunk)}\n\n")
                         flush()
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Streaming failed", e)
-                    val error = ApiError(ApiError.ErrorBody(message = e.message ?: "Generation failed"))
-                    writeString("data: ${json.encodeToString(error)}\n\n")
+                    val error = ErrorResponse(ErrorBody(message = e.message ?: "Generation failed"))
+                    writeStringUtf8("data: ${json.encodeToString(error)}\n\n")
                 }
 
-                writeString("data: [DONE]\n\n")
+                writeStringUtf8("data: [DONE]\n\n")
                 flush()
             }
         } else {
             val builder = StringBuilder()
-            for (piece in LlamaManager.generateStream(prompt, effectiveConfig)) {
+            LlamaManager.generateStream(prompt, effectiveConfig).collect { piece ->
                 builder.append(piece)
             }
 
             respond(
-                ChatCompletionResponse(
+                ChatCompletionChunk(
                     id = completionId,
                     created = created,
                     model = request.model,
                     choices = listOf(
-                        ChatCompletionResponse.Choice(
+                        ChunkChoice(
                             index = 0,
-                            delta = ChatCompletionResponse.Choice.Delta(
+                            delta = ChunkDelta(
                                 role = "assistant",
                                 content = builder.toString()
                             ),
@@ -239,6 +242,6 @@ object ApiServer {
         }
     }
 
-    private fun buildPrompt(messages: List<ChatCompletionRequest.Message>): String =
+    private fun buildPrompt(messages: List<ChatCompletionMessage>): String =
         messages.joinToString("\n") { "${it.role}: ${it.content}" }
 }

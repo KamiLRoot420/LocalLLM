@@ -26,13 +26,13 @@ class SettingsViewModel : ViewModel() {
 
     init {
         viewModelScope.launch {
-            ServiceLocator.dataStore.configFlow().collect { _config.value = it }
+            ServiceLocator.dataStore.configFlow.collect { _config.value = it }
         }
         viewModelScope.launch {
             ServiceLocator.dataStore.wakeLockFlow.collect { _wakeLock.value = it }
         }
         viewModelScope.launch {
-            ServiceLocator.presetRepository.presets.collect { userPresets ->
+            ServiceLocator.presetRepository.presetsFlow.collect { userPresets ->
                 _presets.value = ServerConfig.BUILT_IN_PRESETS + userPresets
             }
         }
@@ -96,6 +96,13 @@ class SettingsViewModel : ViewModel() {
             maxTokens = recommended.maxTokens
         ))
         _statusMessage.value = "Hardware auto-detection applied"
+    }
+
+    fun consumeStatusMessage() {
+        _statusMessage.value = null
+    }
+}
+n applied"
     }
 
     fun consumeStatusMessage() {

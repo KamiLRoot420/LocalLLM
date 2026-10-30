@@ -1,7 +1,9 @@
 package com.rootslab.localllm
 
 import android.Manifest
-import android.content.Intent
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
@@ -35,6 +37,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.rootslab.localllm.di.ServiceLocator
+import com.rootslab.localllm.models.ServerConfig
 import com.rootslab.localllm.ui.screens.AboutScreen
 import com.rootslab.localllm.ui.screens.ChatScreen
 import com.rootslab.localllm.ui.screens.DashboardScreen
@@ -81,10 +84,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Copies the picked GGUF file into the private app storage and stores the
+     * resulting path in the DataStore so that the engine can memory-map it.
+     */
     private fun importModel(uri: Uri) {
         lifecycleScope.launch {
-            val path = ServiceLocator.modelRepository.importModel(uri)
-            if (path == null) {
+            val imported = ServiceLocator.modelRepository.import(uri).getOrNull()
+            if (imported == null) {
                 Toast.makeText(
                     this@MainActivity,
                     getString(R.string.model_import_failed),
@@ -93,10 +100,17 @@ class MainActivity : ComponentActivity() {
                 return@launch
             }
 
-            ServiceLocator.dataStore.setModelPath(path)
+            val config = ServiceLocator.dataStore.currentConfig()
+            ServiceLocator.dataStore.updateConfig(
+                config.copy(
+                    modelPath = imported.absolutePath,
+                    modelName = imported.name
+                )
+            )
+
             Toast.makeText(
                 this@MainActivity,
-                getString(R.string.model_imported, path.substringAfterLast('/')),
+                getString(R.string.model_imported, imported.name),
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -110,6 +124,18 @@ private sealed class Destination(val route: String, val label: String, val icon:
     data object About : Destination("about", "About", Icons.Default.Info)
 }
 
+/**
+ * Resolves the hosting [Activity] from a (possibly wrapped) [Context].
+ *
+ * The vendor specific deep links of [PermissionManager] need a real Activity
+ * because they are started with `startActivity()`.
+ */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
 @Composable
 private fun AppRoot(
     onPickModel: () -> Unit,
@@ -118,16 +144,17 @@ private fun AppRoot(
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
 
-    val onboardingCompleted by ServiceLocator.dataStore.onboardingCompletedFlow
+    val onboardingDone by ServiceLocator.dataStore.onboardingDoneFlow
         .collectAsStateWithLifecycle(initialValue = false)
     val config by ServiceLocator.dataStore.configFlow
-        .collectAsStateWithLifecycle(initialValue = com.rootslab.localllm.models.ServerConfig())
+        .collectAsStateWithLifecycle(initialValue = ServerConfig())
 
     var showOnboarding by remember { mutableStateOf(false) }
 
-    androidx.compose.runtime.LaunchedEffect(onboardingCompleted) {
-        showOnboarding = !onboardingCompleted
+    androidx.compose.runtime.LaunchedEffect(onboardingDone) {
+        showOnboarding = !onboardingDone
     }
 
     if (showOnboarding) {
@@ -138,18 +165,18 @@ private fun AppRoot(
             modelSelected = config.modelPath.isNotBlank(),
             onRequestNotifications = onRequestNotifications,
             onRequestBatteryExemption = {
-                PermissionManager.requestIgnoreBatteryOptimizations(context)
+                activity?.let { PermissionManager.requestIgnoreBatteryOptimizations(it) }
             },
             onOpenAutostart = {
-                PermissionManager.openAutostartSettings(context)
+                activity?.let { PermissionManager.openAutostartSettings(it) }
             },
             onOpenSecurityCenter = {
-                PermissionManager.openXiaomiSecurityCenter(context)
+                activity?.let { PermissionManager.openXiaomiSecurityCenter(it) }
             },
             onPickModel = onPickModel,
             onFinish = {
                 scope.launch {
-                    ServiceLocator.dataStore.setOnboardingCompleted(true)
+                    ServiceLocator.dataStore.setOnboardingDone(true)
                 }
                 showOnboarding = false
             }

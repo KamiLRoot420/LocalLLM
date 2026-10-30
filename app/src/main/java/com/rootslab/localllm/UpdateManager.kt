@@ -155,3 +155,18 @@ object UpdateManager {
         return true
     }
 }
+) return candidate == current
+
+        for (index in 0 until maxOf(candidateParts.size, currentParts.size)) {
+            val a = candidateParts.getOrElse(index) { 0 }
+            val b = currentParts.getOrElse(index) { 0 }
+            if (a != b) return a > b
+        }
+        return true
+    }
+}
+ b
+        }
+        return true
+    }
+}

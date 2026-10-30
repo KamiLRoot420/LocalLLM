@@ -15,6 +15,8 @@ data class ChatCompletionRequest(
     val top_k: Int? = null,
     val presence_penalty: Float? = null,
     val frequency_penalty: Float? = null,
+    /** llama.cpp style repetition penalty (1.0 disables the penalty). */
+    val repetition_penalty: Float? = null,
     val n: Int? = null,
     val stream: Boolean? = null,
     val max_tokens: Int? = null,
