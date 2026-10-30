@@ -1,0 +1,15 @@
+# Normalise line endings for text sources
+* text=auto eol=lf
+
+# Native build artefacts
+*.so binary
+*.a binary
+*.gguf binary
+*.apk binary
+*.aab binary
+
+# Gradle / Android
+*.gradle text
+*.kts text
+*.xml text
+*.pro text
