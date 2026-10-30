@@ -155,8 +155,3 @@ object UpdateManager {
         return true
     }
 }
- b
-        }
-        return true
-    }
-}
