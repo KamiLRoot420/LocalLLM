@@ -7,11 +7,9 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.rootslab.localllm.ApiServer
 import com.rootslab.localllm.LlamaServerService
 import com.rootslab.localllm.di.ServiceLocator
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 
 /**
@@ -35,7 +33,7 @@ class WatchdogWorker(
             return Result.success()
         }
 
-        if (LlamaServerService.isAlive && ApiServer.isRunning.value) {
+        if (LlamaServerService.isAlive && com.rootslab.localllm.ApiServer.isRunning.value) {
             Log.d(TAG, "Watchdog: server is healthy")
             return Result.success()
         }

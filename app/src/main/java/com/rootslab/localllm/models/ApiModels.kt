@@ -9,66 +9,68 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ChatCompletionRequest(
     val model: String = "local-gguf",
-    val messages: List<Message> = emptyList(),
+    val messages: List<ChatCompletionMessage> = emptyList(),
     val temperature: Float? = null,
     val top_p: Float? = null,
     val top_k: Int? = null,
-    val repetition_penalty: Float? = null,
+    val presence_penalty: Float? = null,
+    val frequency_penalty: Float? = null,
     val n: Int? = null,
     val stream: Boolean? = null,
     val max_tokens: Int? = null,
     val stop: List<String>? = null
-) {
-    @Serializable
-    data class Message(
-        val role: String,
-        val content: String
-    )
-}
+)
 
 @Serializable
-data class ChatCompletionResponse(
+data class ChatCompletionMessage(
+    val role: String,
+    val content: String
+)
+
+@Serializable
+data class ChatCompletionChunk(
     val id: String,
     val `object`: String = "chat.completion.chunk",
     val created: Long,
     val model: String,
-    val choices: List<Choice>
-) {
-    @Serializable
-    data class Choice(
-        val index: Int,
-        val delta: Delta,
-        val finish_reason: String? = null
-    ) {
-        @Serializable
-        data class Delta(
-            val role: String? = null,
-            val content: String? = null
-        )
-    }
-}
+    val choices: List<ChunkChoice>
+)
 
 @Serializable
-data class ModelInfo(
+data class ChunkChoice(
+    val index: Int = 0,
+    val delta: ChunkDelta,
+    val finish_reason: String? = null
+)
+
+@Serializable
+data class ChunkDelta(
+    val role: String? = null,
+    val content: String? = null
+)
+
+@Serializable
+data class ModelList(
+    val object: String = "list",
+    val data: List<ModelDescriptor>
+)
+
+@Serializable
+data class ModelDescriptor(
     val id: String,
     val `object`: String = "model",
-    val created: Long = 0L,
+    val created: Long = 0,
     val owned_by: String = "rootslab"
 )
 
 @Serializable
-data class ModelsList(
-    val data: List<ModelInfo>
+data class ErrorResponse(
+    val error: ErrorBody
 )
 
 @Serializable
-data class ApiError(
-    val error: ErrorBody
-) {
-    @Serializable
-    data class ErrorBody(
-        val message: String,
-        val type: String = "invalid_request_error",
-        val code: String? = null
-    )
-}
+data class ErrorBody(
+    val message: String,
+    val type: String = "invalid_request_error",
+    val code: String? = null
+)

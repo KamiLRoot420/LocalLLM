@@ -46,10 +46,8 @@ class LlamaServerService : Service() {
         startForegroundCompat()
 
         when (intent?.action) {
-            ACTION_STOP -> scope.launch { stopEverything() }
-            ACTION_TOGGLE -> scope.launch {
-                if (isServerActive()) stopEverything() else startEverything()
-            }
+            ACTION_STOP -> stopEverything()
+            ACTION_TOGGLE -> scope.launch { if (isServerActive()) stopEverything() else startEverything() }
             else -> scope.launch { startEverything() }
         }
 
@@ -89,10 +87,7 @@ class LlamaServerService : Service() {
         val loaded = LlamaManager.loadModel(config.modelPath, config)
         if (!loaded) {
             dataStore.setServerRunning(false)
-            updateNotification(
-                state = State.ERROR,
-                detail = LlamaManager.lastError ?: "Model load failed"
-            )
+            updateNotification(state = State.ERROR, detail = LlamaManager.lastError ?: "Model load failed")
             return
         }
 
@@ -177,10 +172,6 @@ class LlamaServerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        if (state == State.ERROR) {
-            Log.w(TAG, "Notification state: $state - $detail")
-        }
-
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("LocalLLM AI Server")
             .setContentText(detail)
@@ -196,6 +187,11 @@ class LlamaServerService : Service() {
                 toggleIntent
             )
             .build()
+            .also { notification ->
+                if (state == State.ERROR) {
+                    Log.w(TAG, "Notification state: $state - $detail")
+                }
+            }
     }
 
     // --- wake lock ----------------------------------------------------------

@@ -33,7 +33,8 @@ class WidgetProvider : AppWidgetProvider() {
     companion object {
         const val ACTION_REFRESH = "com.rootslab.localllm.action.REFRESH_WIDGET"
 
-        private fun isRunning(context: Context): Boolean = ApiServer.isRunning.value
+        private fun isRunning(context: Context): Boolean =
+            com.rootslab.localllm.ApiServer.isRunning.value
 
         private fun buildViews(context: Context, running: Boolean): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.widget_layout)

@@ -30,8 +30,8 @@ import java.io.File
 object UpdateManager {
 
     private const val TAG = "UpdateManager"
-    private const val RELEASES_URL =
-        "https://api.github.com/repos/${BuildConfig.GITHUB_REPO}/releases/latest"
+    private const val RELEASES_URL = "https://api.github.com/repos/RootsLab/LocalLLM/releases/latest"
+    private const val DOWNLOAD_ID = 778899L
 
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
@@ -110,10 +110,7 @@ object UpdateManager {
             .setDescription("Downloading update...")
             .setMimeType("application/vnd.android.package-archive")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalPublicDir(
-                Environment.DIRECTORY_DOWNLOADS,
-                "LocalLLM-${release.version}.apk"
-            )
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "LocalLLM-${release.version}.apk")
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(false)
 
@@ -154,6 +151,11 @@ object UpdateManager {
             val a = candidateParts.getOrElse(index) { 0 }
             val b = currentParts.getOrElse(index) { 0 }
             if (a != b) return a > b
+        }
+        return true
+    }
+}
+ b
         }
         return true
     }

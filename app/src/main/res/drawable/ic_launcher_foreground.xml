@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- processor body -->
+    <path
+        android:fillColor="#00C853"
+        android:pathData="M34,34h40v40h-40z" />
+    <path
+        android:fillColor="#0F1A14"
+        android:pathData="M42,42h24v24h-24z" />
+
+    <!-- pins -->
+    <path
+        android:fillColor="#00C853"
+        android:pathData="M40,26h4v8h-4zM52,26h4v8h-4zM64,26h4v8h-4zM40,74h4v8h-4zM52,74h4v8h-4zM64,74h4v8h-4z" />
+    <path
+        android:fillColor="#00C853"
+        android:pathData="M26,40h8v4h-8zM26,52h8v4h-8zM26,64h8v4h-8zM74,40h8v4h-8zM74,52h8v4h-8zM74,64h8v4h-8z" />
+
+    <!-- signal waves -->
+    <path
+        android:fillColor="#A8F5C6"
+        android:pathData="M78,30c4.4,0 8,-3.6 8,-8h-4c0,2.2 -1.8,4 -4,4z" />
+    <path
+        android:fillColor="#A8F5C6"
+        android:pathData="M78,22c8.8,0 16,-7.2 16,-16h-4c0,6.6 -5.4,12 -12,12z" />
+</vector>

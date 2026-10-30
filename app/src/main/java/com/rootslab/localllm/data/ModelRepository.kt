@@ -8,76 +8,55 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * Manages the GGUF models available to the application.
+ * Imports a model picked through the Storage Access Framework into the app's
+ * private storage.
  *
- * The Storage Access Framework returns a content:// URI which the native
- * engine cannot open. Every selected model is therefore copied into the
- * application's private storage, which gives the engine a stable, directly
- * readable path and keeps the model available after the URI permission
- * expires.
+ * llama.cpp memory-maps the model file, therefore it needs a real filesystem
+ * path rather than a `content://` URI. Copying the file also guarantees that
+ * the model stays readable after the user revokes the SAF grant.
  */
-class ModelRepository(context: Context) {
+class ModelRepository(private val context: Context) {
 
-    private val appContext = context.applicationContext
+    private val modelsDir: File
+        get() = File(context.filesDir, "models").apply { if (!exists()) mkdirs() }
 
-    private val modelsDirectory: File by lazy {
-        File(appContext.filesDir, "models").apply { mkdirs() }
-    }
-
-    /**
-     * Copies the document behind [uri] into private storage.
-     *
-     * @return the absolute path of the imported file, or null on failure.
-     */
-    suspend fun importModel(uri: Uri): String? = withContext(Dispatchers.IO) {
+    suspend fun import(uri: Uri): Result<File> = withContext(Dispatchers.IO) {
         runCatching {
-            val displayName = queryDisplayName(uri) ?: "model-${System.currentTimeMillis()}.gguf"
-            val safeName = sanitize(displayName).let {
-                if (it.endsWith(".gguf", ignoreCase = true)) it else "$it.gguf"
-            }
+            val displayName = queryDisplayName(uri) ?: "model.gguf"
+            val safeName = sanitize(displayName)
+            val target = File(modelsDir, safeName)
 
-            val target = uniqueTarget(safeName)
-            appContext.contentResolver.openInputStream(uri)?.use { input ->
-                target.outputStream().use { output ->
-                    input.copyTo(output, DEFAULT_BUFFER_SIZE)
-                }
-            } ?: return@runCatching null
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                target.outputStream().use { output -> input.copyTo(output, DEFAULT_BUFFER_SIZE) }
+            } ?: error("Cannot open the selected file")
 
-            target.absolutePath
-        }.getOrNull()
-    }
-
-    /** All imported models, newest first. */
-    fun listModels(): List<File> =
-        modelsDirectory.listFiles()
-            ?.filter { it.isFile && it.extension.equals("gguf", ignoreCase = true) }
-            ?.sortedByDescending { it.lastModified() }
-            ?: emptyList()
-
-    fun delete(model: File): Boolean = model.delete()
-
-    fun sizeOf(model: File): Long = model.length()
-
-    private fun uniqueTarget(name: String): File {
-        var candidate = File(modelsDirectory, name)
-        if (!candidate.exists()) return candidate
-
-        val base = name.substringBeforeLast('.', name)
-        val extension = name.substringAfterLast('.', "gguf")
-        var index = 1
-        while (candidate.exists()) {
-            candidate = File(modelsDirectory, "$base-$index.$extension")
-            index++
+            target
         }
-        return candidate
     }
 
-    private fun queryDisplayName(uri: Uri): String? =
-        appContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+    suspend fun delete(file: File): Boolean = withContext(Dispatchers.IO) {
+        file.delete()
+    }
+
+    fun listModels(): List<File> = modelsDir.listFiles()?.sortedBy { it.name } ?: emptyList()
+
+    private fun queryDisplayName(uri: Uri): String? {
+        return context.contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null, null, null
+        )?.use { cursor ->
             val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
             if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
         }
+    }
 
-    private fun sanitize(name: String): String =
-        name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(120)
+    private fun sanitize(name: String): String {
+        val cleaned = name.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        return if (cleaned.endsWith(".gguf", ignoreCase = true)) cleaned else "$cleaned.gguf"
+    }
+
+    companion object {
+        private const val DEFAULT_BUFFER_SIZE = 64 * 1024
+    }
 }

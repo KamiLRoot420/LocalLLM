@@ -11,7 +11,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.headers
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationServer
@@ -62,13 +61,17 @@ object ApiServer {
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
+    val port: Int
+        get() = server?.engine?.environment?.connectors
+            ?.firstOrNull()?.port ?: 0
+
     fun start(port: Int, config: ServerConfig) {
         if (_isRunning.value) {
             Log.w(TAG, "Server already running")
             return
         }
 
-        try {
+        return try {
             server = embeddedServer(CIO, host = HOST, port = port) {
                 installModules(config)
             }.start(wait = false)

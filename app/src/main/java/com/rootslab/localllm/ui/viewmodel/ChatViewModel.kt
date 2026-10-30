@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.rootslab.localllm.LlamaManager
 import com.rootslab.localllm.di.ServiceLocator
 import com.rootslab.localllm.models.ChatMessage
+import com.rootslab.localllm.models.ServerConfig
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -47,7 +48,7 @@ class ChatViewModel : ViewModel() {
             val assistantId = ChatMessage.nextId()
             val startedAt = System.currentTimeMillis()
 
-            val content = StringBuilder()
+            var content = StringBuilder()
             var tokenCount = 0
 
             try {

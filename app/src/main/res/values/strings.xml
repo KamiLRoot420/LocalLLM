@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LocalLLM AI Server</string>
+    <string name="widget_description">Start or stop the local AI server</string>
+
+    <string name="notification_permission_denied">Notifications are disabled. The foreground service notification will not be visible.</string>
+    <string name="model_import_failed">Could not import the selected file.</string>
+    <string name="model_imported">Model imported: %1$s</string>
+</resources>
