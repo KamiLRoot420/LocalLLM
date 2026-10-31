@@ -40,35 +40,67 @@ jobs:
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
-      - name: Set up Android SDK (manual install)
+      - name: Set up Android SDK (hybrid)
         run: |
           set -euo pipefail
           
-          # Install Android SDK from scratch using command line tools
-          ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
-          mkdir -p "$ANDROID_SDK_ROOT"
+          # First, check if Android SDK is pre-installed (common on ubuntu-latest)
+          PREINSTALLED_SDK_PATHS=(
+            "/usr/local/lib/android/sdk"
+            "$HOME/Android/Sdk"
+            "/opt/android/sdk"
+          )
           
-          # Download and extract command line tools (use specific known version)
-          CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
-          cd "$ANDROID_SDK_ROOT"
-          echo "Downloading cmdline-tools from $CMDLINE_TOOLS_URL"
-          wget -q "$CMDLINE_TOOLS_URL" -O cmdline-tools.zip || { echo "Download failed"; exit 1; }
-          echo "Extracting..."
-          unzip -q cmdline-tools.zip -d cmdline-tools-temp || { echo "Unzip failed"; exit 1; }
-          echo "Contents of extracted:"
-          ls -la cmdline-tools-temp/
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools-temp/* cmdline-tools/latest/ 2>/dev/null || mv cmdline-tools-temp/cmdline-tools/* cmdline-tools/latest/
-          rm -rf cmdline-tools-temp cmdline-tools.zip
+          ANDROID_HOME=""
+          for path in "${PREINSTALLED_SDK_PATHS[@]}"; do
+            if [ -d "$path/cmdline-tools/latest/bin" ] && [ -f "$path/cmdline-tools/latest/bin/sdkmanager" ]; then
+              ANDROID_HOME="$path"
+              echo "Found pre-installed Android SDK at $ANDROID_HOME"
+              break
+            elif [ -d "$path" ] && [ -f "$path/tools/bin/sdkmanager" ]; then
+              # Old structure
+              ANDROID_HOME="$path"
+              echo "Found pre-installed Android SDK (old structure) at $ANDROID_HOME"
+              break
+            fi
+          done
           
-          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          # If not found, install from scratch
+          if [ -z "$ANDROID_HOME" ]; then
+            echo "No pre-installed SDK found, installing from scratch..."
+            ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
+            mkdir -p "$ANDROID_SDK_ROOT"
+            
+            # Download command line tools - use a known stable version
+            CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+            cd "$ANDROID_SDK_ROOT"
+            echo "Downloading cmdline-tools..."
+            wget -q "$CMDLINE_TOOLS_URL" -O cmdline-tools.zip || { echo "Download failed"; exit 1; }
+            echo "Extracting..."
+            unzip -q cmdline-tools.zip -d cmdline-tools-temp || { echo "Unzip failed"; exit 1; }
+            echo "Extracted contents:"
+            ls -la cmdline-tools-temp/
+            
+            # Handle both possible extracted structures
+            mkdir -p cmdline-tools/latest
+            if [ -d "cmdline-tools-temp/cmdline-tools" ]; then
+              mv cmdline-tools-temp/cmdline-tools/* cmdline-tools/latest/
+            else
+              mv cmdline-tools-temp/* cmdline-tools/latest/
+            fi
+            rm -rf cmdline-tools-temp cmdline-tools.zip
+            
+            ANDROID_HOME="$ANDROID_SDK_ROOT"
+          fi
+          
+          export ANDROID_HOME
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           
           # Verify sdkmanager exists
           if [ ! -f "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
-            echo "ERROR: sdkmanager not found at $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-            find "$ANDROID_HOME" -name "sdkmanager" -type f
+            echo "ERROR: sdkmanager not found"
+            find "$ANDROID_HOME" -name "sdkmanager" -type f 2>/dev/null
             exit 1
           fi
           
