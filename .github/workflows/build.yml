@@ -40,43 +40,48 @@ jobs:
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
-      - name: Install Android SDK (manual, proven method)
+      - name: Set up Android SDK (use pre-installed)
         run: |
           set -euo pipefail
           
-          # Use the exact same method that works in thousands of Android projects
-          ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
-          mkdir -p "$ANDROID_SDK_ROOT"
+          # GitHub ubuntu-latest runners have Android SDK pre-installed
+          # Find the SDK root
+          if [ -d "/usr/local/lib/android/sdk" ]; then
+            ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
+          elif [ -d "$HOME/Android/Sdk" ]; then
+            ANDROID_SDK_ROOT="$HOME/Android/Sdk"
+          elif [ -d "/opt/android/sdk" ]; then
+            ANDROID_SDK_ROOT="/opt/android/sdk"
+          else
+            echo "ERROR: Android SDK not found in standard locations"
+            find / -maxdepth 4 -name "sdkmanager" -type f 2>/dev/null | head -5
+            exit 1
+          fi
           
-          # Download cmdline-tools - this URL and version is known to work
-          CMDLINE_TOOLS_VERSION="11076708"
-          CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_VERSION}_latest.zip"
+          echo "Found Android SDK at: $ANDROID_SDK_ROOT"
           
-          cd "$ANDROID_SDK_ROOT"
-          echo "Downloading cmdline-tools ${CMDLINE_TOOLS_VERSION}..."
-          wget -q "$CMDLINE_TOOLS_URL" -O cmdline-tools.zip
+          # Find cmdline-tools versioned directory and create 'latest' symlink
+          CMDLINE_TOOLS_DIR=$(find "$ANDROID_SDK_ROOT/cmdline-tools" -maxdepth 1 -type d -name "[0-9]*" | head -1)
+          if [ -z "$CMDLINE_TOOLS_DIR" ]; then
+            echo "ERROR: No versioned cmdline-tools directory found"
+            ls -la "$ANDROID_SDK_ROOT/cmdline-tools/" 2>/dev/null || echo "cmdline-tools dir not found"
+            exit 1
+          fi
           
-          # Extract - the zip contains a "cmdline-tools" directory
-          unzip -q cmdline-tools.zip
-          # Move to cmdline-tools/latest (standard layout)
-          mv cmdline-tools cmdline-tools-latest
-          mkdir -p cmdline-tools
-          mv cmdline-tools-latest cmdline-tools/latest
-          rm cmdline-tools.zip
+          echo "Found cmdline-tools at: $CMDLINE_TOOLS_DIR"
+          ln -sfn "$CMDLINE_TOOLS_DIR" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
           
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           
-          # Verify
-          echo "sdkmanager location: $(which sdkmanager)"
+          # Verify sdkmanager
+          echo "sdkmanager: $(which sdkmanager)"
           sdkmanager --version
           
-          # Accept licenses
+          # Accept licenses and install packages
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          
-          # Install packages
-          echo "Installing SDK packages..."
+          echo "Installing packages..."
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;${ANDROID_NDK_VERSION}" "cmake;${ANDROID_CMAKE_VERSION}"
           
           # Set NDK path
