@@ -30,7 +30,17 @@ import java.io.File
 object UpdateManager {
 
     private const val TAG = "UpdateManager"
-    private const val RELEASES_URL = "https://api.github.com/repos/RootsLab/LocalLLM/releases/latest"
+
+    /**
+     * Single source of truth for the repository that hosts the releases.
+     *
+     * The value is injected by the Gradle build (`buildConfigField`), therefore
+     * the OTA updater can never drift away from the repository the APK was
+     * actually published from.
+     */
+    private val RELEASES_URL =
+        "https://api.github.com/repos/${BuildConfig.GITHUB_REPO}/releases/latest"
+
     private const val DOWNLOAD_ID = 778899L
 
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
@@ -151,21 +161,6 @@ object UpdateManager {
             val a = candidateParts.getOrElse(index) { 0 }
             val b = currentParts.getOrElse(index) { 0 }
             if (a != b) return a > b
-        }
-        return true
-    }
-}
-) return candidate == current
-
-        for (index in 0 until maxOf(candidateParts.size, currentParts.size)) {
-            val a = candidateParts.getOrElse(index) { 0 }
-            val b = currentParts.getOrElse(index) { 0 }
-            if (a != b) return a > b
-        }
-        return true
-    }
-}
- b
         }
         return true
     }

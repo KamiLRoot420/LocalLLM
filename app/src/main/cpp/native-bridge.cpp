@@ -12,6 +12,8 @@
 // * The KV-cache occupancy is tracked by the bridge itself, so the UI can show
 //   an accurate context-window usage indicator without depending on
 //   llama_get_kv_cache_token_count (which is not present in every revision).
+//
+// llama.cpp tag: b4585 (API uses llama_batch for decode, llama_vocab for tokenize)
 
 #include <jni.h>
 
@@ -171,8 +173,9 @@ llama_token sample_token(std::vector<float> & logits, float temperature) {
 }
 
 std::string token_to_piece(llama_context * ctx, llama_token token) {
+    const llama_vocab * vocab = llama_model_get_vocab(llama_get_model(ctx));
     char buffer[512];
-    int written = llama_token_to_piece(ctx, token, buffer, sizeof(buffer), 0, true);
+    int written = llama_token_to_piece(vocab, token, buffer, sizeof(buffer), 0, true);
     if (written >= 0) {
         return std::string(buffer, static_cast<size_t>(written));
     }
@@ -180,7 +183,7 @@ std::string token_to_piece(llama_context * ctx, llama_token token) {
     // Negative return value means the buffer was too small; -written is the
     // required size (including the null terminator).
     std::vector<char> large(static_cast<size_t>(-written));
-    written = llama_token_to_piece(ctx, token, large.data(), static_cast<int>(large.size()), 0, true);
+    written = llama_token_to_piece(vocab, token, large.data(), static_cast<int>(large.size()), 0, true);
     if (written < 0) {
         return {};
     }
@@ -201,10 +204,10 @@ std::string model_info_json() {
         "{\"description\":\"%s\",\"n_vocab\":%d,\"n_ctx_train\":%d,\"n_embd\":%d,"
         "\"n_layer\":%d,\"n_params\":%llu,\"size_bytes\":%llu,\"n_ctx\":%d}",
         description,
-        static_cast<int>(llama_n_vocab(g_model)),
-        static_cast<int>(llama_n_ctx_train(g_model)),
-        static_cast<int>(llama_n_embd(g_model)),
-        static_cast<int>(llama_n_layer(g_model)),
+        static_cast<int>(llama_n_vocab(llama_model_get_vocab(g_model))),
+        static_cast<int>(llama_model_n_ctx_train(g_model)),
+        static_cast<int>(llama_model_n_embd(g_model)),
+        static_cast<int>(llama_model_n_layer(g_model)),
         static_cast<unsigned long long>(llama_model_n_params(g_model)),
         static_cast<unsigned long long>(llama_model_size(g_model)),
         g_ctx != nullptr ? static_cast<int>(llama_n_ctx(g_ctx)) : 0);
@@ -287,7 +290,8 @@ Java_com_rootslab_localllm_LlamaManager_nativeLoadModel(
     ctx_params.n_threads_batch = threads;
     ctx_params.n_gpu_layers = j_ngl;
     ctx_params.offload_kqv = true;
-    ctx_params.seed = j_seed;
+    // seed is uint32_t in llama.cpp b4585; mask negative seeds
+    ctx_params.seed = static_cast<uint32_t>(j_seed >= 0 ? j_seed : 0xFFFFFFFFu);
 
     g_ctx = llama_new_context_with_model(g_model, ctx_params);
     if (g_ctx == nullptr) {
@@ -297,7 +301,7 @@ Java_com_rootslab_localllm_LlamaManager_nativeLoadModel(
         return JNI_FALSE;
     }
 
-    g_rng.seed(static_cast<uint32_t>(j_seed >= 0 ? j_seed : 0x5eed1234u));
+    g_rng.seed(ctx_params.seed);
     reset_generation_state();
     return JNI_TRUE;
 }
@@ -363,19 +367,30 @@ Java_com_rootslab_localllm_LlamaManager_nativeGenerateStart(
     reset_generation_state();
     clear_error();
 
-    std::vector<llama_token> tokens = llama_tokenize(g_ctx, text.c_str(), true, true);
-    if (tokens.empty()) {
+    const llama_vocab * vocab = llama_model_get_vocab(llama_get_model(g_ctx));
+    std::vector<llama_token> tokens(text.size() + 1);
+    int n_tokens = llama_tokenize(vocab, text.c_str(), static_cast<int>(text.size()),
+                                  tokens.data(), static_cast<int>(tokens.size()), true, true);
+    if (n_tokens < 0) {
+        n_tokens = -n_tokens;
+        tokens.resize(n_tokens);
+        n_tokens = llama_tokenize(vocab, text.c_str(), static_cast<int>(text.size()),
+                                  tokens.data(), static_cast<int>(tokens.size()), true, true);
+    }
+    if (n_tokens <= 0) {
         set_error("prompt tokenized to an empty sequence");
         return JNI_FALSE;
     }
+    tokens.resize(n_tokens);
 
     const int n_ctx = static_cast<int>(llama_n_ctx(g_ctx));
-    if (static_cast<int>(tokens.size()) >= n_ctx) {
+    if (n_tokens >= n_ctx) {
         set_error("prompt exceeds the context window");
         return JNI_FALSE;
     }
 
-    if (llama_decode(g_ctx, tokens.data(), static_cast<int>(tokens.size()), n_ctx) != 0) {
+    llama_batch batch = llama_batch_get_one(tokens.data(), n_tokens);
+    if (llama_decode(g_ctx, batch) != 0) {
         set_error("llama_decode failed for the prompt");
         return JNI_FALSE;
     }
@@ -424,7 +439,7 @@ Java_com_rootslab_localllm_LlamaManager_nativeGenerateNext(
     apply_top_p(logits, j_top_p);
 
     const llama_token next = sample_token(logits, j_temperature);
-    if (next == llama_token_eos(g_ctx)) {
+    if (next == llama_vocab_eos(llama_model_get_vocab(g_model))) {
         g_generating = false;
         return nullptr;
     }
@@ -436,7 +451,8 @@ Java_com_rootslab_localllm_LlamaManager_nativeGenerateNext(
         return nullptr;
     }
 
-    if (llama_decode(g_ctx, &next, 1, n_ctx) != 0) {
+    llama_batch batch = llama_batch_get_one(&next, 1);
+    if (llama_decode(g_ctx, batch) != 0) {
         g_generating = false;
         set_error("llama_decode failed while generating");
         return nullptr;

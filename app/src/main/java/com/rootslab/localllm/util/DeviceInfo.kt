@@ -100,6 +100,53 @@ object DeviceInfo {
         return floorToPowerOfTwo(limit.coerceIn(512, 32768))
     }
 
+    /**
+     * Validates that the given configuration will not OOM the process.
+     *
+     * @return null if the config is safe, otherwise an error message describing
+     *         why the configuration would exceed available memory.
+     */
+    fun validateConfigOrNull(context: Context, config: ServerConfig, modelPath: String?): String? {
+        val info = memoryInfo(context)
+        val availableRam = info.availMem
+        val metadata = modelPath?.takeIf { it.isNotBlank() }?.let { GgufInspector.inspect(it) }
+
+        // Estimate model weights size (if metadata available, use it; otherwise file size)
+        val modelWeightsBytes = metadata?.let { it.estimateModelSizeBytes() }
+            ?: modelPath?.takeIf { it.isNotBlank() }?.let { File(it).length() }
+            ?: 0L
+
+        // Estimate KV cache size
+        val kvCacheBytes = metadata?.estimateKvCacheBytes(config.ctxSize)
+            ?: estimateKvCacheBytesFallback(config.ctxSize, config.ngl)
+
+        // Estimate context overhead (activations, workspace, etc.)
+        val overheadBytes = (config.ctxSize * 1024L * 4L) // rough estimate
+
+        val totalEstimated = modelWeightsBytes + kvCacheBytes + overheadBytes
+        val safetyMargin = (availableRam * 0.15).toLong() // keep 15% free
+
+        return if (totalEstimated + safetyMargin > availableRam) {
+            "Estimated memory usage (${formatBytes(totalEstimated)}) exceeds available RAM (${formatBytes(availableRam)}) with safety margin. " +
+                "Reduce context size (current: ${config.ctxSize}) or GPU offload layers (current: ${config.ngl})."
+        } else null
+    }
+
+    private fun estimateKvCacheBytesFallback(ctxSize: Int, ngl: Int): Long {
+        // Conservative fallback: assume 40 layers, 4096 embedding, fp16 KV
+        val layers = if (ngl > 0) 40 else 40
+        val embedding = 4096
+        return 2L * layers * ctxSize * embedding * 2L // K + V, fp16
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        return when {
+            bytes >= 1024L * 1024L * 1024L -> String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+            bytes >= 1024L * 1024L -> String.format("%.0f MB", bytes / (1024.0 * 1024.0))
+            else -> String.format("%.0f KB", bytes / 1024.0)
+        }
+    }
+
     private fun floorToPowerOfTwo(value: Int): Int {
         if (value <= 0) return 512
         var result = 1

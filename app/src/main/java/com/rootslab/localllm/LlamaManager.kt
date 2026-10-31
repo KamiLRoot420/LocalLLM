@@ -52,9 +52,34 @@ object LlamaManager {
     var lastError: String? = null
         private set
 
+    @Volatile
+    private var nativeLibLoaded = false
+
     init {
-        System.loadLibrary("native-bridge")
-        nativeInit()
+        loadNativeLibrary()
+        if (nativeLibLoaded) {
+            nativeInit()
+        }
+    }
+
+    /**
+     * Loads the native library with a guard against UnsatisfiedLinkError.
+     * The library is loaded exactly once per process.
+     */
+    private fun loadNativeLibrary() {
+        if (nativeLibLoaded) return
+        try {
+            System.loadLibrary("native-bridge")
+            nativeLibLoaded = true
+            Log.i(TAG, "native-bridge library loaded successfully")
+        } catch (e: UnsatisfiedLinkError) {
+            lastError = "Failed to load native library: ${e.message}. " +
+                "Ensure the NDK build produced libnative-bridge.so for the device ABI."
+            Log.e(TAG, lastError!!, e)
+        } catch (e: Exception) {
+            lastError = "Unexpected error loading native library: ${e.message}"
+            Log.e(TAG, lastError!!, e)
+        }
     }
 
     // --- native declarations ------------------------------------------------
@@ -99,6 +124,10 @@ object LlamaManager {
      */
     suspend fun loadModel(path: String, config: ServerConfig): Boolean =
         withContext(Dispatchers.IO) {
+            if (!nativeLibLoaded) {
+                lastError = "Native library not loaded"
+                return@withContext false
+            }
             if (path.isBlank()) {
                 lastError = "No model selected"
                 return@withContext false
@@ -123,23 +152,28 @@ object LlamaManager {
 
     /** Releases the model and all associated buffers. */
     suspend fun unloadModel() = withContext(Dispatchers.IO) {
-        nativeFree()
+        if (nativeLibLoaded) {
+            nativeFree()
+        }
         isLoaded = false
         lastError = null
         Log.i(TAG, "Model unloaded")
     }
 
-    fun contextSize(): Int = nativeGetContextSize()
+    fun contextSize(): Int = if (nativeLibLoaded) nativeGetContextSize() else 0
 
-    fun tokenCount(): Int = nativeGetTokenCount()
+    fun tokenCount(): Int = if (nativeLibLoaded) nativeGetTokenCount() else 0
 
-    fun isGenerating(): Boolean = nativeIsGenerating()
+    fun isGenerating(): Boolean = if (nativeLibLoaded) nativeIsGenerating() else false
 
     fun stopGeneration() {
-        nativeGenerateStop()
+        if (nativeLibLoaded) {
+            nativeGenerateStop()
+        }
     }
 
     fun modelInfo(): ModelRuntimeInfo {
+        if (!nativeLibLoaded) return ModelRuntimeInfo()
         val raw = nativeGetModelInfo()
         if (raw.isBlank() || raw == "{}") return ModelRuntimeInfo()
         return runCatching {
@@ -164,6 +198,11 @@ object LlamaManager {
      * collector stops the native generation as well.
      */
     fun generateStream(prompt: String, config: ServerConfig): Flow<String> = flow {
+        if (!nativeLibLoaded) {
+            lastError = "Native library not loaded"
+            Log.e(TAG, "generateStream: $lastError")
+            return@flow
+        }
         val started = nativeGenerateStart(
             prompt,
             config.temperature,

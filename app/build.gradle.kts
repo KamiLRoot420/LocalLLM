@@ -16,9 +16,10 @@ android {
         versionCode = 100
         versionName = "1.0.0"
 
-        // Repository consulted by the OTA updater. Change to "RootsLab/LocalLLM"
-        // once the build is published from the Roots Lab organisation.
-        buildConfigField("String", "GITHUB_REPO", "\"KamiLRoot420/LocalLLM\"")
+        // Repository consulted by the OTA updater. Must match the GitHub repo
+        // the APK is published from. Injected via BuildConfig so the updater
+        // can never drift away from the actual release source.
+        buildConfigField("String", "GITHUB_REPO", "\"RootsLab/LocalLLM\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -59,11 +60,12 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     externalNativeBuild {
         cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
+            path = "src/main/cpp/CMakeLists.txt"
             version = "3.22.1"
         }
     }
@@ -73,6 +75,11 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "META-INF/INDEX.LIST"
             excludes += "META-INF/io.netty.versions.properties"
+        }
+        jniLibs {
+            // Ensure the Vulkan backend shared library is packaged for both ABIs
+            pickFirsts += "**/libvulkan.so"
+            pickFirsts += "**/libggml-vulkan.so"
         }
     }
 }
