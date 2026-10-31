@@ -22,7 +22,7 @@ env:
 jobs:
   build:
     name: Assemble debug APK
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 180
 
     steps:
@@ -40,12 +40,10 @@ jobs:
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v2
+      - name: Set up Android SDK (minimal config)
+        uses: android-actions/setup-android@v3
         with:
           api-level: 35
-          ndk-version: ${{ env.ANDROID_NDK_VERSION }}
-          cmake-version: ${{ env.ANDROID_CMAKE_VERSION }}
           cache: false
 
       - name: Verify Android SDK
@@ -54,7 +52,7 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
           ls -la "$ANDROID_HOME/platforms/" || true
           ls -la "$ANDROID_NDK_HOME/" || true
-          "$ANDROID_NDK_HOME/build/cmake/${ANDROID_CMAKE_VERSION}/bin/cmake" --version
+          "$ANDROID_NDK_HOME/build/cmake/3.22.1/bin/cmake" --version
 
       - name: Install Vulkan SDK
         # The ggml Vulkan backend of llama.cpp needs the Vulkan C++ header
