@@ -29,15 +29,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Debug - list pre-installed Android SDK
-        run: |
-          echo "=== Checking for pre-installed Android SDK ==="
-          ls -la /usr/local/lib/android/ 2>/dev/null || echo "No /usr/local/lib/android"
-          ls -la /opt/android/ 2>/dev/null || echo "No /opt/android"
-          ls -la $HOME/Android/ 2>/dev/null || echo "No $HOME/Android"
-          find / -maxdepth 4 -name "sdkmanager" -type f 2>/dev/null | head -10 || echo "No sdkmanager found"
-          find / -maxdepth 4 -name "cmdline-tools" -type d 2>/dev/null | head -10 || echo "No cmdline-tools found"
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -55,6 +46,7 @@ jobs:
           api-level: 35
           ndk-version: ${{ env.ANDROID_NDK_VERSION }}
           cmake-version: ${{ env.ANDROID_CMAKE_VERSION }}
+          cmdline-tools-version: "11076708"
           cache: false
 
       - name: Verify Android SDK
