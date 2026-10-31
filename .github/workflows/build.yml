@@ -40,21 +40,55 @@ jobs:
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 35
-          ndk-version: ${{ env.ANDROID_NDK_VERSION }}
-          cmake-version: ${{ env.ANDROID_CMAKE_VERSION }}
-          cmdline-tools-version: "11076708"
-          cache: false
-
-      - name: Verify Android SDK
+      - name: Install Android SDK (manual, proven method)
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          ls -la "$ANDROID_HOME/platforms/" || true
-          ls -la "$ANDROID_NDK_HOME/" || true
+          set -euo pipefail
+          
+          # Use the exact same method that works in thousands of Android projects
+          ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
+          mkdir -p "$ANDROID_SDK_ROOT"
+          
+          # Download cmdline-tools - this URL and version is known to work
+          CMDLINE_TOOLS_VERSION="11076708"
+          CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_VERSION}_latest.zip"
+          
+          cd "$ANDROID_SDK_ROOT"
+          echo "Downloading cmdline-tools ${CMDLINE_TOOLS_VERSION}..."
+          wget -q "$CMDLINE_TOOLS_URL" -O cmdline-tools.zip
+          
+          # Extract - the zip contains a "cmdline-tools" directory
+          unzip -q cmdline-tools.zip
+          # Move to cmdline-tools/latest (standard layout)
+          mv cmdline-tools cmdline-tools-latest
+          mkdir -p cmdline-tools
+          mv cmdline-tools-latest cmdline-tools/latest
+          rm cmdline-tools.zip
+          
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          
+          # Verify
+          echo "sdkmanager location: $(which sdkmanager)"
+          sdkmanager --version
+          
+          # Accept licenses
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          
+          # Install packages
+          echo "Installing SDK packages..."
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;${ANDROID_NDK_VERSION}" "cmake;${ANDROID_CMAKE_VERSION}"
+          
+          # Set NDK path
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
+          
+          # Verify
+          echo "=== Android SDK ==="
+          ls -la "$ANDROID_HOME/platforms/"
+          echo "=== NDK ==="
+          ls -la "$ANDROID_NDK_HOME/"
+          echo "=== CMake ==="
           "$ANDROID_NDK_HOME/build/cmake/${ANDROID_CMAKE_VERSION}/bin/cmake" --version
 
       - name: Install Vulkan SDK
