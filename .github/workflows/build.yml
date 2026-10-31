@@ -40,26 +40,28 @@ jobs:
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
-      - name: Set up Android SDK (manual)
+      - name: Set up Android SDK (manual install)
         run: |
           set -euo pipefail
-          # Android SDK is pre-installed on ubuntu-latest runners
-          # Find the SDK path
-          if [ -d "/usr/local/lib/android/sdk" ]; then
-            export ANDROID_HOME="/usr/local/lib/android/sdk"
-          elif [ -d "$HOME/Android/Sdk" ]; then
-            export ANDROID_HOME="$HOME/Android/Sdk"
-          elif [ -d "/opt/android/sdk" ]; then
-            export ANDROID_HOME="/opt/android/sdk"
-          else
-            echo "Android SDK not found in standard locations"
-            find / -maxdepth 4 -name "sdkmanager" -type f 2>/dev/null | head -5
-            exit 1
-          fi
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
           
-          # Install required packages
+          # Install Android SDK from scratch using command line tools
+          ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
+          mkdir -p "$ANDROID_SDK_ROOT"
+          
+          # Download and extract command line tools
+          CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+          cd "$ANDROID_SDK_ROOT"
+          wget -q "$CMDLINE_TOOLS_URL" -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip -d cmdline-tools-temp
+          mkdir -p cmdline-tools/latest
+          mv cmdline-tools-temp/cmdline-tools/* cmdline-tools/latest/
+          rm -rf cmdline-tools-temp cmdline-tools.zip
+          
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          
+          # Accept licenses and install packages
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager --install \
             "platform-tools" \
