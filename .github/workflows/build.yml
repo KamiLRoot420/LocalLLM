@@ -40,8 +40,19 @@ jobs:
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
-      - name: Set up Android SDK (minimal config)
-        uses: android-actions/setup-android@v3
+      - name: Debug - Check pre-installed Android SDK
+        run: |
+          echo "=== Checking pre-installed Android SDK ==="
+          find / -name "sdkmanager" -type f 2>/dev/null | head -20
+          find / -name "cmdline-tools" -type d 2>/dev/null | head -20
+          ls -la /usr/local/lib/android/ 2>/dev/null || echo "No /usr/local/lib/android"
+          ls -la /opt/android/ 2>/dev/null || echo "No /opt/android"
+          ls -la ~/android/ 2>/dev/null || echo "No ~/android"
+          echo "ANDROID_HOME=${ANDROID_HOME:-not set}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-not set}"
+
+      - name: Set up Android SDK (official Google action)
+        uses: actions/setup-android@v2
         with:
           api-level: 35
           cache: false
@@ -54,10 +65,15 @@ jobs:
           ls -la "$ANDROID_NDK_HOME/" || true
           "$ANDROID_NDK_HOME/build/cmake/3.22.1/bin/cmake" --version
 
+      - name: Install NDK and CMake
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "ndk;${ANDROID_NDK_VERSION}" \
+            "cmake;${ANDROID_CMAKE_VERSION}" \
+            "build-tools;35.0.0"
+
       - name: Install Vulkan SDK
-        # The ggml Vulkan backend of llama.cpp needs the Vulkan C++ header
-        # (vulkan.hpp is not part of the NDK sysroot) and glslc, which compiles
-        # the capability probe shaders while CMake configures the project.
         run: |
           set -euo pipefail
           wget -qO /tmp/lunarg.asc https://packages.lunarg.com/lunarg-signing-key-pub.asc
@@ -69,9 +85,6 @@ jobs:
           sudo apt-get install -y --no-install-recommends vulkan-sdk \
             || sudo apt-get install -y --no-install-recommends vulkan-headers vulkan-tools shaderc
 
-          # Re-home the headers and the shader compiler into a self-contained
-          # prefix: adding /usr/include to the cross compilation include path
-          # would expose the host glibc headers to the Android toolchain.
           mkdir -p "$RUNNER_TEMP/vulkan/include" "$RUNNER_TEMP/vulkan/bin"
           cp -r /usr/include/vulkan "$RUNNER_TEMP/vulkan/include/"
           ln -sf "$(command -v glslc)" "$RUNNER_TEMP/vulkan/bin/glslc"
