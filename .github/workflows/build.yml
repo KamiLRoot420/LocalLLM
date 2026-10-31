@@ -22,7 +22,7 @@ env:
 jobs:
   build:
     name: Assemble debug APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 180
 
     steps:
