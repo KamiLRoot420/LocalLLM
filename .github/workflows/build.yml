@@ -35,6 +35,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Install git (for FetchContent)
+        run: sudo apt-get update -y && sudo apt-get install -y git
+
       - name: Install Gradle
         run: |
           set -euo pipefail
@@ -61,6 +64,10 @@ jobs:
         with:
           packages: "platforms;android-35 platform-tools build-tools;35.0.0"
           cmdline-tools-version: "15859902"
+
+      - name: Accept Android SDK licenses
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
 
       - name: Install NDK and CMake
         run: |
@@ -132,6 +139,9 @@ jobs:
             cxx-${{ runner.os }}-
 
       - name: Build
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+          VULKAN_SDK: ${{ env.VULKAN_SDK }}
         run: gradle :app:assembleDebug --stacktrace --no-daemon
 
       - name: Upload debug APK
@@ -160,6 +170,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: Install git (for FetchContent)
+        run: sudo apt-get update -y && sudo apt-get install -y git
 
       - name: Install Gradle
         run: |
