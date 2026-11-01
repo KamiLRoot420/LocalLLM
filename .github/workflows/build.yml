@@ -126,13 +126,8 @@ jobs:
           restore-keys: |
             cxx-${{ runner.os }}-
 
-      - name: Generate Gradle wrapper
-        run: |
-          chmod +x gradlew
-          ./gradlew wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
-
       - name: Build
-        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -167,7 +162,7 @@ jobs:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
       - name: Generate wrapper
-        run: ./gradlew wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
+        run: gradle wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
 
       - name: Commit wrapper
         run: |
