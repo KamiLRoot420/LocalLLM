@@ -64,50 +64,31 @@ jobs:
             "ndk;${ANDROID_NDK_VERSION}" \
             "cmake;${ANDROID_CMAKE_VERSION}"
 
-      - name: Debug - Verify NDK structure
-        run: |
-          echo "=== NDK Debug ==="
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME:-not set}"
-          ls -la "$ANDROID_HOME/" || true
-          find "$ANDROID_HOME" -name "cmake" -type f 2>/dev/null | head -20
-          find "$ANDROID_HOME" -name "ndk" -type d 2>/dev/null | head -20
-          # Try to find NDK path
-          NDK_PATH=$(find "$ANDROID_HOME" -maxdepth 3 -path "*/ndk/*" -name "source.properties" 2>/dev/null | head -1 | xargs dirname 2>/dev/null || true)
-          if [ -n "$NDK_PATH" ]; then
-            echo "Found NDK at: $NDK_PATH"
-            ls -la "$NDK_PATH/"
-          fi
-
-      - name: Verify Android SDK and find CMake
+      - name: Set up NDK path and verify CMake
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME:-not set}"
           ls -la "$ANDROID_HOME/platforms/" || true
           
-          # Find NDK if ANDROID_NDK_HOME not set
-          if [ -z "${ANDROID_NDK_HOME:-}" ] || [ ! -d "$ANDROID_NDK_HOME" ]; then
-            echo "ANDROID_NDK_HOME not set or invalid, searching..."
-            NDK_PATH=$(find "$ANDROID_HOME" -maxdepth 3 -path "*/ndk/*" -name "source.properties" 2>/dev/null | head -1 | xargs dirname 2>/dev/null || true)
-            if [ -n "$NDK_PATH" ] && [ -d "$NDK_PATH" ]; then
-              export ANDROID_NDK_HOME="$NDK_PATH"
-              echo "Set ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-            fi
+          # NDK installed by sdkmanager goes to $ANDROID_HOME/ndk/<version>
+          NDK_PATH="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
+          if [ -d "$NDK_PATH" ]; then
+            export ANDROID_NDK_HOME="$NDK_PATH"
+            echo "Set ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+            ls -la "$ANDROID_NDK_HOME/"
+          else
+            echo "ERROR: NDK not found at $NDK_PATH"
+            find "$ANDROID_HOME/ndk" -maxdepth 1 -type d 2>/dev/null || true
+            exit 1
           fi
           
-          if [ -n "${ANDROID_NDK_HOME:-}" ] && [ -d "$ANDROID_NDK_HOME" ]; then
-            ls -la "$ANDROID_NDK_HOME/"
-            # Find cmake dynamically
-            CMAKE_BIN=$(find "$ANDROID_NDK_HOME" -name "cmake" -type f 2>/dev/null | head -1)
-            if [ -n "$CMAKE_BIN" ]; then
-              echo "Found cmake at: $CMAKE_BIN"
-              "$CMAKE_BIN" --version
-            else
-              echo "ERROR: cmake not found in NDK"
-              exit 1
-            fi
+          # Find cmake in NDK
+          CMAKE_BIN=$(find "$ANDROID_NDK_HOME" -name "cmake" -type f 2>/dev/null | head -1)
+          if [ -n "$CMAKE_BIN" ]; then
+            echo "Found cmake at: $CMAKE_BIN"
+            "$CMAKE_BIN" --version
           else
-            echo "ERROR: Could not locate NDK"
+            echo "ERROR: cmake not found in NDK"
+            find "$ANDROID_NDK_HOME" -type f -name "*cmake*" 2>/dev/null | head -20
             exit 1
           fi
 
