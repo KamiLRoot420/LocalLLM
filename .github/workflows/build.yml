@@ -129,7 +129,7 @@ jobs:
       - name: Generate Gradle wrapper
         run: |
           chmod +x gradlew
-          gradle wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
+          ./gradlew wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
 
       - name: Build
         run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
@@ -167,7 +167,7 @@ jobs:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
       - name: Generate wrapper
-        run: gradle wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
+        run: ./gradlew wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
 
       - name: Commit wrapper
         run: |
