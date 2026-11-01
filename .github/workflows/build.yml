@@ -105,29 +105,87 @@ jobs:
             exit 1
           fi
 
-      - name: Install glslc (Vulkan shader compiler) if available
+      - name: Install Vulkan SDK (LunarG)
         run: |
           set -euo pipefail
           sudo apt-get update -y
-          # Try to install glslc from default repos
-          if sudo apt-get install -y --no-install-recommends glslc 2>/dev/null; then
-            echo "glslc installed successfully"
-          else
-            echo "glslc not available in default repos, trying shaderc..."
-            sudo apt-get install -y --no-install-recommends shaderc 2>/dev/null || echo "shaderc also not available"
+          sudo apt-get install -y wget
+          # Download and install Vulkan SDK from LunarG
+          VULKAN_VERSION="1.3.296.0"
+          VULKAN_URL="https://sdk.lunarg.com/sdk/download/${VULKAN_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_VERSION}.tar.gz"
+          echo "Downloading Vulkan SDK ${VULKAN_VERSION}..."
+          wget -q "$VULKAN_URL" -O /tmp/vulkansdk.tar.gz
+          mkdir -p "$RUNNER_TEMP/vulkan-sdk"
+          tar -xzf /tmp/vulkansdk.tar.gz -C "$RUNNER_TEMP/vulkan-sdk"
+          # Find the actual SDK directory
+          VULKAN_SDK_DIR=$(find "$RUNNER_TEMP/vulkan-sdk" -name "x86_64" -type d | head -1)
+          if [ -z "$VULKAN_SDK_DIR" ]; then
+            VULKAN_SDK_DIR=$(find "$RUNNER_TEMP/vulkan-sdk" -name "1.3.*" -type d | head -1)
           fi
-          
-          # Check if glslc is available
-          if command -v glslc &> /dev/null; then
+          if [ -n "$VULKAN_SDK_DIR" ]; then
+            echo "VULKAN_SDK=$VULKAN_SDK_DIR" >> "$GITHUB_ENV"
+            echo "Found Vulkan SDK at: $VULKAN_SDK_DIR"
+            ls -la "$VULKAN_SDK_DIR"
+          else
+            echo "WARNING: Could not find Vulkan SDK directory"
+            find "$RUNNER_TEMP/vulkan-sdk" -type d | head -20
+            mkdir -p "$RUNNER_TEMP/vulkan-sdk/dummy"
+            echo "VULKAN_SDK=$RUNNER_TEMP/vulkan-sdk/dummy" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install glslc (Vulkan shader compiler)
+        run: |
+          set -euo pipefail
+          # Check if glslc is in Vulkan SDK
+          if [ -f "$VULKAN_SDK/bin/glslc" ]; then
+            echo "glslc found in Vulkan SDK"
             mkdir -p "$RUNNER_TEMP/vulkan/bin"
-            ln -sf "$(command -v glslc)" "$RUNNER_TEMP/vulkan/bin/glslc"
-            echo "VULKAN_SDK=$RUNNER_TEMP/vulkan" >> "$GITHUB_ENV"
+            ln -sf "$VULKAN_SDK/bin/glslc" "$RUNNER_TEMP/vulkan/bin/glslc"
             "$RUNNER_TEMP/vulkan/bin/glslc" --version
           else
-            echo "WARNING: glslc not found, Vulkan shader compilation may fail"
-            # Create dummy to avoid errors
-            mkdir -p "$RUNNER_TEMP/vulkan/bin"
-            echo "VULKAN_SDK=$RUNNER_TEMP/vulkan" >> "$GITHUB_ENV"
+            echo "glslc not in Vulkan SDK, trying apt..."
+            sudo apt-get install -y --no-install-recommends glslc 2>/dev/null || echo "glslc not available"
+            if command -v glslc &> /dev/null; then
+              mkdir -p "$RUNNER_TEMP/vulkan/bin"
+              ln -sf "$(command -v glslc)" "$RUNNER_TEMP/vulkan/bin/glslc"
+            fi
+          fi
+
+      - name: Debug - Verify paths before CMake
+        run: |
+          set -euo pipefail
+          echo "=== Verifying paths before CMake ==="
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "VULKAN_SDK=$VULKAN_SDK"
+          echo "ANDROID_CMAKE_VERSION=$ANDROID_CMAKE_VERSION"
+          
+          # Check toolchain file
+          TOOLCHAIN="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
+          if [ -f "$TOOLCHAIN" ]; then
+            echo "Toolchain file found: $TOOLCHAIN"
+          else
+            echo "ERROR: Toolchain file NOT found at $TOOLCHAIN"
+            find "$ANDROID_NDK_HOME" -name "android.toolchain.cmake" 2>/dev/null
+            exit 1
+          fi
+          
+          # Check CMake binary
+          CMAKE_BIN="$ANDROID_HOME/cmake/${ANDROID_CMAKE_VERSION}/bin/cmake"
+          if [ -f "$CMAKE_BIN" ]; then
+            echo "CMake binary found: $CMAKE_BIN"
+            "$CMAKE_BIN" --version
+          else
+            echo "ERROR: CMake binary NOT found at $CMAKE_BIN"
+            exit 1
+          fi
+          
+          # Check Vulkan SDK
+          if [ -d "$VULKAN_SDK" ]; then
+            echo "VULKAN_SDK directory exists: $VULKAN_SDK"
+            ls -la "$VULKAN_SDK"
+          else
+            echo "WARNING: VULKAN_SDK directory does not exist: $VULKAN_SDK"
           fi
 
       - name: Debug - Test CMake configuration
