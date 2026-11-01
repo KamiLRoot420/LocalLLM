@@ -93,18 +93,12 @@ jobs:
             exit 1
           fi
 
-      - name: Install Vulkan SDK
+      - name: Install Vulkan headers and shader compiler
         run: |
           set -euo pipefail
-          wget -qO /tmp/lunarg.asc https://packages.lunarg.com/lunarg-signing-key-pub.asc
-          gpg --dearmor < /tmp/lunarg.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg-vulkan.gpg > /dev/null
-          . /etc/os-release
-          wget -qO /etc/apt/sources.list.d/lunarg-vulkan.list \
-            "https://packages.lunarg.com/vulkan/lunarg-vulkan-${VERSION_CODENAME}.list"
           sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends vulkan-sdk \
-            || sudo apt-get install -y --no-install-recommends vulkan-headers vulkan-tools shaderc
-
+          sudo apt-get install -y --no-install-recommends vulkan-headers shaderc
+          
           mkdir -p "$RUNNER_TEMP/vulkan/include" "$RUNNER_TEMP/vulkan/bin"
           cp -r /usr/include/vulkan "$RUNNER_TEMP/vulkan/include/"
           ln -sf "$(command -v glslc)" "$RUNNER_TEMP/vulkan/bin/glslc"
