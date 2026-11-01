@@ -35,18 +35,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install git (for FetchContent)
-        run: sudo apt-get update -y && sudo apt-get install -y git
-
-      - name: Install Gradle
-        run: |
-          set -euo pipefail
-          GRADLE_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
-          echo "Downloading Gradle ${GRADLE_VERSION}..."
-          curl -L -o /tmp/gradle.zip "$GRADLE_URL"
-          unzip -q /tmp/gradle.zip -d /opt
-          ln -sf /opt/gradle-${GRADLE_VERSION}/bin/gradle /usr/local/bin/gradle
-          gradle --version
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
 
       - name: Debug - Check pre-installed Android SDK
         run: |
@@ -64,10 +56,6 @@ jobs:
         with:
           packages: "platforms;android-35 platform-tools build-tools;35.0.0"
           cmdline-tools-version: "15859902"
-
-      - name: Accept Android SDK licenses
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
 
       - name: Install NDK and CMake
         run: |
@@ -105,94 +93,29 @@ jobs:
             exit 1
           fi
 
-      - name: Install Vulkan development packages
+      - name: Install glslc (Vulkan shader compiler) if available
         run: |
           set -euo pipefail
           sudo apt-get update -y
-          # Install Vulkan headers, loader, and glslc from Ubuntu repos
-          sudo apt-get install -y --no-install-recommends \
-            libvulkan-dev \
-            vulkan-tools \
-            glslc 2>/dev/null || echo "Some packages not available, continuing..."
-          
-          # Set VULKAN_SDK for CMake find_package
-          if [ -d "/usr/lib/x86_64-linux-gnu" ] && [ -f "/usr/include/vulkan/vulkan.h" ]; then
-            echo "VULKAN_SDK=/usr" >> "$GITHUB_ENV"
-            echo "Using system Vulkan SDK at /usr"
+          # Try to install glslc from default repos
+          if sudo apt-get install -y --no-install-recommends glslc 2>/dev/null; then
+            echo "glslc installed successfully"
           else
-            mkdir -p "$RUNNER_TEMP/vulkan"
-            echo "VULKAN_SDK=$RUNNER_TEMP/vulkan" >> "$GITHUB_ENV"
-            echo "Using dummy Vulkan SDK"
+            echo "glslc not available in default repos, trying shaderc..."
+            sudo apt-get install -y --no-install-recommends shaderc 2>/dev/null || echo "shaderc also not available"
           fi
           
-          # Check glslc
+          # Check if glslc is available
           if command -v glslc &> /dev/null; then
-            echo "glslc found: $(command -v glslc)"
-            glslc --version
+            mkdir -p "$RUNNER_TEMP/vulkan/bin"
+            ln -sf "$(command -v glslc)" "$RUNNER_TEMP/vulkan/bin/glslc"
+            echo "VULKAN_SDK=$RUNNER_TEMP/vulkan" >> "$GITHUB_ENV"
+            "$RUNNER_TEMP/vulkan/bin/glslc" --version
           else
-            echo "WARNING: glslc not found"
-          fi
-
-      - name: Debug - Verify paths before CMake
-        run: |
-          set -euo pipefail
-          echo "=== Verifying paths before CMake ==="
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          echo "VULKAN_SDK=$VULKAN_SDK"
-          echo "ANDROID_CMAKE_VERSION=$ANDROID_CMAKE_VERSION"
-          
-          # Check toolchain file
-          TOOLCHAIN="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake"
-          if [ -f "$TOOLCHAIN" ]; then
-            echo "Toolchain file found: $TOOLCHAIN"
-          else
-            echo "ERROR: Toolchain file NOT found at $TOOLCHAIN"
-            find "$ANDROID_NDK_HOME" -name "android.toolchain.cmake" 2>/dev/null
-            exit 1
-          fi
-          
-          # Check CMake binary
-          CMAKE_BIN="$ANDROID_HOME/cmake/${ANDROID_CMAKE_VERSION}/bin/cmake"
-          if [ -f "$CMAKE_BIN" ]; then
-            echo "CMake binary found: $CMAKE_BIN"
-            "$CMAKE_BIN" --version
-          else
-            echo "ERROR: CMake binary NOT found at $CMAKE_BIN"
-            exit 1
-          fi
-          
-          # Check Vulkan SDK
-          if [ -d "$VULKAN_SDK" ]; then
-            echo "VULKAN_SDK directory exists: $VULKAN_SDK"
-            ls -la "$VULKAN_SDK"
-          else
-            echo "WARNING: VULKAN_SDK directory does not exist: $VULKAN_SDK"
-          fi
-
-      - name: Debug - Test CMake configuration (verbose)
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-          VULKAN_SDK: ${{ env.VULKAN_SDK }}
-        run: |
-          set -euo pipefail
-          echo "=== Testing CMake configuration (verbose) ==="
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          echo "VULKAN_SDK=$VULKAN_SDK"
-          CMAKE_BIN="$ANDROID_HOME/cmake/${ANDROID_CMAKE_VERSION}/bin/cmake"
-          cd app/src/main/cpp
-          "$CMAKE_BIN" -B build_test \
-            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-28 \
-            -DANDROID_STL=c++_shared \
-            -DGGML_VULKAN=ON \
-            -DGGML_NATIVE=OFF \
-            -DCMAKE_BUILD_TYPE=Debug \
-            --trace-expand 2>&1 | head -200
-          echo "=== CMake configure exit code: $? ==="
-          if [ -d build_test ]; then
-            ls -la build_test/
+            echo "WARNING: glslc not found, Vulkan shader compilation may fail"
+            # Create dummy to avoid errors
+            mkdir -p "$RUNNER_TEMP/vulkan/bin"
+            echo "VULKAN_SDK=$RUNNER_TEMP/vulkan" >> "$GITHUB_ENV"
           fi
 
       - name: Cache native build
@@ -203,11 +126,13 @@ jobs:
           restore-keys: |
             cxx-${{ runner.os }}-
 
+      - name: Generate Gradle wrapper
+        run: |
+          chmod +x gradlew
+          ./gradlew wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
+
       - name: Build
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-          VULKAN_SDK: ${{ env.VULKAN_SDK }}
-        run: gradle :app:assembleDebug --info --stacktrace --no-daemon
+        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -236,21 +161,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install git (for FetchContent)
-        run: sudo apt-get update -y && sudo apt-get install -y git
-
-      - name: Install Gradle
-        run: |
-          set -euo pipefail
-          GRADLE_URL="https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
-          echo "Downloading Gradle ${GRADLE_VERSION}..."
-          curl -L -o /tmp/gradle.zip "$GRADLE_URL"
-          unzip -q /tmp/gradle.zip -d /opt
-          ln -sf /opt/gradle-${GRADLE_VERSION}/bin/gradle /usr/local/bin/gradle
-          gradle --version
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
 
       - name: Generate wrapper
-        run: gradle wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
+        run: ./gradlew wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
 
       - name: Commit wrapper
         run: |
