@@ -142,7 +142,7 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
           VULKAN_SDK: ${{ env.VULKAN_SDK }}
-        run: gradle :app:assembleDebug --stacktrace --no-daemon
+        run: gradle :app:assembleDebug --info --stacktrace --no-daemon
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
