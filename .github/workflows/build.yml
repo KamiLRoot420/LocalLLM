@@ -130,6 +130,28 @@ jobs:
             echo "VULKAN_SDK=$RUNNER_TEMP/vulkan" >> "$GITHUB_ENV"
           fi
 
+      - name: Debug - Test CMake configuration
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+          VULKAN_SDK: ${{ env.VULKAN_SDK }}
+        run: |
+          set -euo pipefail
+          echo "=== Testing CMake configuration ==="
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          echo "VULKAN_SDK=$VULKAN_SDK"
+          CMAKE_BIN="$ANDROID_HOME/cmake/${ANDROID_CMAKE_VERSION}/bin/cmake"
+          cd app/src/main/cpp
+          "$CMAKE_BIN" -B build_test \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-28 \
+            -DANDROID_STL=c++_shared \
+            -DGGML_VULKAN=ON \
+            -DGGML_NATIVE=OFF \
+            -DCMAKE_BUILD_TYPE=Debug
+          echo "=== CMake configure succeeded ==="
+          ls -la build_test/
+
       - name: Cache native build
         uses: actions/cache@v4
         with:
