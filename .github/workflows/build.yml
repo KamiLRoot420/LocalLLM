@@ -105,50 +105,32 @@ jobs:
             exit 1
           fi
 
-      - name: Install Vulkan SDK (LunarG)
+      - name: Install Vulkan development packages
         run: |
           set -euo pipefail
           sudo apt-get update -y
-          sudo apt-get install -y wget
-          # Download and install Vulkan SDK from LunarG
-          VULKAN_VERSION="1.3.296.0"
-          VULKAN_URL="https://sdk.lunarg.com/sdk/download/${VULKAN_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_VERSION}.tar.gz"
-          echo "Downloading Vulkan SDK ${VULKAN_VERSION}..."
-          wget -q "$VULKAN_URL" -O /tmp/vulkansdk.tar.gz
-          mkdir -p "$RUNNER_TEMP/vulkan-sdk"
-          tar -xzf /tmp/vulkansdk.tar.gz -C "$RUNNER_TEMP/vulkan-sdk"
-          # Find the actual SDK directory
-          VULKAN_SDK_DIR=$(find "$RUNNER_TEMP/vulkan-sdk" -name "x86_64" -type d | head -1)
-          if [ -z "$VULKAN_SDK_DIR" ]; then
-            VULKAN_SDK_DIR=$(find "$RUNNER_TEMP/vulkan-sdk" -name "1.3.*" -type d | head -1)
-          fi
-          if [ -n "$VULKAN_SDK_DIR" ]; then
-            echo "VULKAN_SDK=$VULKAN_SDK_DIR" >> "$GITHUB_ENV"
-            echo "Found Vulkan SDK at: $VULKAN_SDK_DIR"
-            ls -la "$VULKAN_SDK_DIR"
+          # Install Vulkan headers, loader, and glslc from Ubuntu repos
+          sudo apt-get install -y --no-install-recommends \
+            libvulkan-dev \
+            vulkan-tools \
+            glslc 2>/dev/null || echo "Some packages not available, continuing..."
+          
+          # Set VULKAN_SDK for CMake find_package
+          if [ -d "/usr/lib/x86_64-linux-gnu" ] && [ -f "/usr/include/vulkan/vulkan.h" ]; then
+            echo "VULKAN_SDK=/usr" >> "$GITHUB_ENV"
+            echo "Using system Vulkan SDK at /usr"
           else
-            echo "WARNING: Could not find Vulkan SDK directory"
-            find "$RUNNER_TEMP/vulkan-sdk" -type d | head -20
-            mkdir -p "$RUNNER_TEMP/vulkan-sdk/dummy"
-            echo "VULKAN_SDK=$RUNNER_TEMP/vulkan-sdk/dummy" >> "$GITHUB_ENV"
+            mkdir -p "$RUNNER_TEMP/vulkan"
+            echo "VULKAN_SDK=$RUNNER_TEMP/vulkan" >> "$GITHUB_ENV"
+            echo "Using dummy Vulkan SDK"
           fi
-
-      - name: Install glslc (Vulkan shader compiler)
-        run: |
-          set -euo pipefail
-          # Check if glslc is in Vulkan SDK
-          if [ -f "$VULKAN_SDK/bin/glslc" ]; then
-            echo "glslc found in Vulkan SDK"
-            mkdir -p "$RUNNER_TEMP/vulkan/bin"
-            ln -sf "$VULKAN_SDK/bin/glslc" "$RUNNER_TEMP/vulkan/bin/glslc"
-            "$RUNNER_TEMP/vulkan/bin/glslc" --version
+          
+          # Check glslc
+          if command -v glslc &> /dev/null; then
+            echo "glslc found: $(command -v glslc)"
+            glslc --version
           else
-            echo "glslc not in Vulkan SDK, trying apt..."
-            sudo apt-get install -y --no-install-recommends glslc 2>/dev/null || echo "glslc not available"
-            if command -v glslc &> /dev/null; then
-              mkdir -p "$RUNNER_TEMP/vulkan/bin"
-              ln -sf "$(command -v glslc)" "$RUNNER_TEMP/vulkan/bin/glslc"
-            fi
+            echo "WARNING: glslc not found"
           fi
 
       - name: Debug - Verify paths before CMake
