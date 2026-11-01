@@ -54,16 +54,15 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          api-level: 35
-          cache: false
+          packages: "platforms;android-35 platform-tools build-tools;35.0.0"
+          cmdline-tools-version: "15859902"
 
       - name: Install NDK and CMake
         run: |
           set -euo pipefail
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
             "ndk;${ANDROID_NDK_VERSION}" \
-            "cmake;${ANDROID_CMAKE_VERSION}" \
-            "build-tools;35.0.0"
+            "cmake;${ANDROID_CMAKE_VERSION}"
 
       - name: Verify Android SDK
         run: |
