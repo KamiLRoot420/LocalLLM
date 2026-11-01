@@ -81,14 +81,15 @@ jobs:
             exit 1
           fi
           
-          # Find cmake in NDK
-          CMAKE_BIN=$(find "$ANDROID_NDK_HOME" -name "cmake" -type f 2>/dev/null | head -1)
-          if [ -n "$CMAKE_BIN" ]; then
+          # CMake installed by sdkmanager goes to $ANDROID_HOME/cmake/<version> (SEPARATE from NDK!)
+          CMAKE_PATH="$ANDROID_HOME/cmake/${ANDROID_CMAKE_VERSION}"
+          if [ -d "$CMAKE_PATH" ]; then
+            CMAKE_BIN="$CMAKE_PATH/bin/cmake"
             echo "Found cmake at: $CMAKE_BIN"
             "$CMAKE_BIN" --version
           else
-            echo "ERROR: cmake not found in NDK"
-            find "$ANDROID_NDK_HOME" -type f -name "*cmake*" 2>/dev/null | head -20
+            echo "ERROR: CMake not found at $CMAKE_PATH"
+            find "$ANDROID_HOME/cmake" -maxdepth 1 -type d 2>/dev/null || true
             exit 1
           fi
 
