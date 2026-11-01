@@ -51,8 +51,8 @@ jobs:
           echo "ANDROID_HOME=${ANDROID_HOME:-not set}"
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-not set}"
 
-      - name: Set up Android SDK (official Google action)
-        uses: actions/setup-android@v2
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
         with:
           api-level: 35
           cache: false
