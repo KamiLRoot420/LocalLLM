@@ -170,13 +170,13 @@ jobs:
             echo "WARNING: VULKAN_SDK directory does not exist: $VULKAN_SDK"
           fi
 
-      - name: Debug - Test CMake configuration
+      - name: Debug - Test CMake configuration (verbose)
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
           VULKAN_SDK: ${{ env.VULKAN_SDK }}
         run: |
           set -euo pipefail
-          echo "=== Testing CMake configuration ==="
+          echo "=== Testing CMake configuration (verbose) ==="
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
           echo "VULKAN_SDK=$VULKAN_SDK"
           CMAKE_BIN="$ANDROID_HOME/cmake/${ANDROID_CMAKE_VERSION}/bin/cmake"
@@ -188,9 +188,12 @@ jobs:
             -DANDROID_STL=c++_shared \
             -DGGML_VULKAN=ON \
             -DGGML_NATIVE=OFF \
-            -DCMAKE_BUILD_TYPE=Debug
-          echo "=== CMake configure succeeded ==="
-          ls -la build_test/
+            -DCMAKE_BUILD_TYPE=Debug \
+            --trace-expand 2>&1 | head -200
+          echo "=== CMake configure exit code: $? ==="
+          if [ -d build_test ]; then
+            ls -la build_test/
+          fi
 
       - name: Cache native build
         uses: actions/cache@v4
