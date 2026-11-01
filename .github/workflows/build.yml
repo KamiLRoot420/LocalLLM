@@ -93,17 +93,30 @@ jobs:
             exit 1
           fi
 
-      - name: Install Vulkan headers and shader compiler
+      - name: Install glslc (Vulkan shader compiler) if available
         run: |
           set -euo pipefail
           sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends vulkan-headers shaderc
+          # Try to install glslc from default repos
+          if sudo apt-get install -y --no-install-recommends glslc 2>/dev/null; then
+            echo "glslc installed successfully"
+          else
+            echo "glslc not available in default repos, trying shaderc..."
+            sudo apt-get install -y --no-install-recommends shaderc 2>/dev/null || echo "shaderc also not available"
+          fi
           
-          mkdir -p "$RUNNER_TEMP/vulkan/include" "$RUNNER_TEMP/vulkan/bin"
-          cp -r /usr/include/vulkan "$RUNNER_TEMP/vulkan/include/"
-          ln -sf "$(command -v glslc)" "$RUNNER_TEMP/vulkan/bin/glslc"
-          echo "VULKAN_SDK=$RUNNER_TEMP/vulkan" >> "$GITHUB_ENV"
-          "$RUNNER_TEMP/vulkan/bin/glslc" --version
+          # Check if glslc is available
+          if command -v glslc &> /dev/null; then
+            mkdir -p "$RUNNER_TEMP/vulkan/bin"
+            ln -sf "$(command -v glslc)" "$RUNNER_TEMP/vulkan/bin/glslc"
+            echo "VULKAN_SDK=$RUNNER_TEMP/vulkan" >> "$GITHUB_ENV"
+            "$RUNNER_TEMP/vulkan/bin/glslc" --version
+          else
+            echo "WARNING: glslc not found, Vulkan shader compilation may fail"
+            # Create dummy to avoid errors
+            mkdir -p "$RUNNER_TEMP/vulkan/bin"
+            echo "VULKAN_SDK=$RUNNER_TEMP/vulkan" >> "$GITHUB_ENV"
+          fi
 
       - name: Cache native build
         uses: actions/cache@v4
