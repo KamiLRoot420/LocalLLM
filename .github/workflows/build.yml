@@ -57,14 +57,6 @@ jobs:
           api-level: 35
           cache: false
 
-      - name: Verify Android SDK
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          ls -la "$ANDROID_HOME/platforms/" || true
-          ls -la "$ANDROID_NDK_HOME/" || true
-          "$ANDROID_NDK_HOME/build/cmake/3.22.1/bin/cmake" --version
-
       - name: Install NDK and CMake
         run: |
           set -euo pipefail
@@ -72,6 +64,14 @@ jobs:
             "ndk;${ANDROID_NDK_VERSION}" \
             "cmake;${ANDROID_CMAKE_VERSION}" \
             "build-tools;35.0.0"
+
+      - name: Verify Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          ls -la "$ANDROID_HOME/platforms/" || true
+          ls -la "$ANDROID_NDK_HOME/" || true
+          "$ANDROID_NDK_HOME/build/cmake/3.22.1/bin/cmake" --version
 
       - name: Install Vulkan SDK
         run: |
