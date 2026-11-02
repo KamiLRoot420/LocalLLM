@@ -155,6 +155,17 @@ jobs:
           ls -la app/build/outputs/ 2>/dev/null || echo "No outputs dir"
           ls -la app/build/outputs/apk/ 2>/dev/null || echo "No apk dir"
           ls -la app/build/outputs/bundle/ 2>/dev/null || echo "No bundle dir"
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Build Outputs" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          find app/build -name "*.apk" -o -name "*.aab" 2>/dev/null | head -20 >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### app/build/outputs/" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          ls -la app/build/outputs/ 2>/dev/null >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload build log
         uses: actions/upload-artifact@v4
@@ -177,6 +188,8 @@ jobs:
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/*/debug/*.apk
             app/build/outputs/bundle/debug/*.aab
+            **/build/outputs/apk/debug/*.apk
+            **/build/outputs/bundle/debug/*.aab
           if-no-files-found: error
 
   wrapper:
