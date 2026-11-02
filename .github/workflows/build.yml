@@ -36,9 +36,11 @@ jobs:
           java-version: '17'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/gradle-build-action@v3
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
+          arguments: :app:assembleDebug
+          build-root-directory: .
 
       - name: Debug - Check pre-installed Android SDK
         run: |
@@ -157,12 +159,11 @@ jobs:
           java-version: '17'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/gradle-build-action@v3
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
-
-      - name: Generate wrapper
-        run: gradle wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
+          arguments: wrapper
+          build-root-directory: .
 
       - name: Commit wrapper
         run: |
