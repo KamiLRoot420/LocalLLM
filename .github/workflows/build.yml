@@ -39,10 +39,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
-          cache-disabled: true
-
-      - name: Verify gradle
-        run: gradle --version
 
       - name: Debug - Check pre-installed Android SDK
         run: |
@@ -60,10 +56,6 @@ jobs:
         with:
           packages: "platforms;android-35 platform-tools build-tools;35.0.0"
           cmdline-tools-version: "15859902"
-
-      - name: Accept Android SDK licenses
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
 
       - name: Install NDK and CMake
         run: |
@@ -101,13 +93,6 @@ jobs:
             exit 1
           fi
 
-      - name: Create local.properties
-        run: |
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
-          echo "ndk.dir=$ANDROID_NDK_HOME" >> local.properties
-          echo "cmake.dir=$ANDROID_HOME/cmake/${ANDROID_CMAKE_VERSION}" >> local.properties
-          cat local.properties
-
       - name: Install glslc (Vulkan shader compiler) if available
         run: |
           set -euo pipefail
@@ -141,55 +126,19 @@ jobs:
           restore-keys: |
             cxx-${{ runner.os }}-
 
-      - name: Build (capture logs)
+      - name: Generate Gradle wrapper
         run: |
-          gradle :app:assembleDebug --stacktrace --no-daemon --info > build.log 2>&1 || true
-          echo "BUILD_EXIT_CODE=$?" >> $GITHUB_ENV
-          tail -200 build.log
-        continue-on-error: true
+          chmod +x gradlew
+          ./gradlew wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
 
-      - name: List build outputs
-        run: |
-          echo "=== Build outputs ==="
-          find app/build -name "*.apk" -o -name "*.aab" 2>/dev/null | head -20
-          ls -la app/build/outputs/ 2>/dev/null || echo "No outputs dir"
-          ls -la app/build/outputs/apk/ 2>/dev/null || echo "No apk dir"
-          ls -la app/build/outputs/bundle/ 2>/dev/null || echo "No bundle dir"
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Build Outputs" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "```" >> $GITHUB_STEP_SUMMARY
-          find app/build -name "*.apk" -o -name "*.aab" 2>/dev/null | head -20 >> $GITHUB_STEP_SUMMARY
-          echo "```" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### app/build/outputs/" >> $GITHUB_STEP_SUMMARY
-          echo "```" >> $GITHUB_STEP_SUMMARY
-          ls -la app/build/outputs/ 2>/dev/null >> $GITHUB_STEP_SUMMARY
-          echo "```" >> $GITHUB_STEP_SUMMARY
-
-      - name: Upload build log
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
-          if-no-files-found: warn
-
-      - name: Check build result
-        if: env.BUILD_EXIT_CODE != '0'
-        run: |
-          echo "Build failed with exit code $BUILD_EXIT_CODE"
-          exit $BUILD_EXIT_CODE
+      - name: Build
+        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/*/debug/*.apk
-            app/build/outputs/bundle/debug/*.aab
-            **/build/outputs/apk/debug/*.apk
-            **/build/outputs/bundle/debug/*.aab
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
   wrapper:
@@ -216,10 +165,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
-          cache-disabled: true
 
       - name: Generate wrapper
-        run: gradle wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
+        run: ./gradlew wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
 
       - name: Commit wrapper
         run: |
