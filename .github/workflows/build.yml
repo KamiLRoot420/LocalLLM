@@ -141,8 +141,25 @@ jobs:
           restore-keys: |
             cxx-${{ runner.os }}-
 
-      - name: Build
-        run: gradle :app:assembleDebug --stacktrace --no-daemon
+      - name: Build (capture logs)
+        run: |
+          gradle :app:assembleDebug --stacktrace --no-daemon --info > build.log 2>&1 || true
+          echo "BUILD_EXIT_CODE=$?" >> $GITHUB_ENV
+          tail -200 build.log
+        continue-on-error: true
+
+      - name: Upload build log
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: warn
+
+      - name: Check build result
+        if: env.BUILD_EXIT_CODE != '0'
+        run: |
+          echo "Build failed with exit code $BUILD_EXIT_CODE"
+          exit $BUILD_EXIT_CODE
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
